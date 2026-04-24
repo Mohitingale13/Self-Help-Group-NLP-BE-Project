@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useData, getDurationRuleForAmount, validateLoanRequest } from "@/contexts/DataContext";
+import { numberToMarathiWords } from "@/lib/numberToMarathiWords";
 import Colors from "@/constants/colors";
 
 export default function CreateLoanScreen() {
@@ -156,6 +157,9 @@ export default function CreateLoanScreen() {
               keyboardType="number-pad"
             />
           </View>
+          {!!numberToMarathiWords(amount) && (
+            <Text style={styles.amountInWords}>{numberToMarathiWords(amount)}</Text>
+          )}
           {!!amountError && <Text style={styles.errorText}>{amountError}</Text>}
 
           <Text style={[styles.label, { marginTop: 12 }]}>{t("duration")} *</Text>
@@ -383,6 +387,14 @@ const styles = StyleSheet.create({
     color: Colors.light.danger,
     marginLeft: 4,
     marginTop: 4,
+  },
+  amountInWords: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: Colors.light.primary,
+    marginLeft: 4,
+    marginTop: 6,
+    fontStyle: "italic",
   },
   hintRow: {
     flexDirection: "row",
