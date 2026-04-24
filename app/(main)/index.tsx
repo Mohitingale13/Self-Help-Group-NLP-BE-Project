@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, RefreshControl, Animated } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, RefreshControl, Animated, Modal, TextInput, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -7,7 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useData } from "@/contexts/DataContext";
 import Colors from "@/constants/colors";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { processVoiceCommand, isSpeechRecognitionSupported, type NLPResult } from "@/lib/nlpHandler";
+import { processVoiceCommand, isSpeechRecognitionSupported, classifyIntent, type NLPResult } from "@/lib/nlpHandler";
 
 function StatCard({ icon, label, value, color, onPress }: { icon: string; label: string; value: string | number; color: string; onPress?: () => void }) {
   return (
@@ -38,6 +38,9 @@ export default function DashboardScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [mobileModalVisible, setMobileModalVisible] = useState(false);
+  const [mobileInputText, setMobileInputText] = useState("");
 
   useEffect(() => {
     return () => {
@@ -74,6 +77,12 @@ export default function DashboardScreen() {
   const handleMicPress = async () => {
     if (micState === "listening" || micState === "processing") return;
 
+    if (Platform.OS !== "web") {
+      setMobileInputText("");
+      setMobileModalVisible(true);
+      return;
+    }
+
     if (!isSpeechRecognitionSupported()) {
       setErrorMsg(language === "mr"
         ? "हे फीचर Chrome browser मध्येच काम करते."
@@ -92,6 +101,36 @@ export default function DashboardScreen() {
     try {
       const { transcript: t, result } = await processVoiceCommand(language);
       setTranscript(t);
+      setNlpResult(result);
+      setMicState("result");
+
+      if (result.route) {
+        resultTimer.current = setTimeout(() => {
+          setMicState("idle");
+          router.push(result.route as any);
+        }, 2200);
+      } else {
+        resultTimer.current = setTimeout(() => setMicState("idle"), 4000);
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || (language === "mr" ? "काहीतरी चूक झाली." : "Something went wrong."));
+      setMicState("error");
+      resultTimer.current = setTimeout(() => setMicState("idle"), 4000);
+    }
+  };
+
+  const handleMobileVoiceSubmit = async () => {
+    const text = mobileInputText.trim();
+    if (!text) return;
+    setMobileModalVisible(false);
+    if (resultTimer.current) clearTimeout(resultTimer.current);
+    setTranscript(text);
+    setNlpResult(null);
+    setErrorMsg("");
+    setMicState("processing");
+
+    try {
+      const result = await classifyIntent(text);
       setNlpResult(result);
       setMicState("result");
 
@@ -349,6 +388,53 @@ export default function DashboardScreen() {
           ) : null}
         </Animated.View>
       )}
+
+      <Modal
+        visible={mobileModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMobileModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalBackdrop}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <Ionicons name="mic" size={22} color={Colors.light.primary} />
+                <Text style={styles.modalTitle}>
+                  {language === "mr" ? "आवाज कमांड" : "Voice Command"}
+                </Text>
+                <Pressable onPress={() => setMobileModalVisible(false)} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={Colors.light.textMuted} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalHint}>
+                {language === "mr"
+                  ? "खाली टाइप करा किंवा कीबोर्डवरील माइक वापरा"
+                  : "Type below or use your keyboard's microphone"}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                value={mobileInputText}
+                onChangeText={setMobileInputText}
+                placeholder={language === "mr" ? "उदा. बैठका दाखवा, कर्ज दाखवा..." : "e.g. Show meetings, View loans..."}
+                placeholderTextColor={Colors.light.textMuted}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleMobileVoiceSubmit}
+              />
+              <Pressable
+                style={[styles.modalSubmitBtn, { opacity: mobileInputText.trim() ? 1 : 0.45 }]}
+                onPress={handleMobileVoiceSubmit}
+                disabled={!mobileInputText.trim()}
+              >
+                <Text style={styles.modalSubmitText}>
+                  {language === "mr" ? "सबमिट करा" : "Submit"}
+                </Text>
+              </Pressable>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
     </View>
   );
@@ -615,5 +701,56 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_500Medium",
     fontSize: 11,
     color: Colors.light.textSecondary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: Colors.light.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 36,
+    gap: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 17,
+    color: Colors.light.text,
+    flex: 1,
+  },
+  modalHint: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+  },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: Colors.light.primary + "55",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 15,
+    color: Colors.light.text,
+    backgroundColor: Colors.light.background,
+  },
+  modalSubmitBtn: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  modalSubmitText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: "#fff",
   },
 });

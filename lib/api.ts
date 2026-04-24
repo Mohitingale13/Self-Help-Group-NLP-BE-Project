@@ -1,5 +1,7 @@
 import { getItem, setItem, removeItem } from "@/lib/storage";
 
+const BASE_URL = "https://self-help-group-nlp-be-project.onrender.com";
+
 const SESSION_TOKEN_KEY = "shg_session_token";
 
 export async function getToken(): Promise<string | null> {
