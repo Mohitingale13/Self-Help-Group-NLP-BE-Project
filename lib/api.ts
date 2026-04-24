@@ -1,19 +1,17 @@
+import { getItem, setItem, removeItem } from "@/lib/storage";
+
 const SESSION_TOKEN_KEY = "shg_session_token";
 
-export function getToken(): string | null {
-  try {
-    return localStorage.getItem(SESSION_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+export async function getToken(): Promise<string | null> {
+  return await getItem(SESSION_TOKEN_KEY);
 }
 
-export function saveToken(token: string): void {
-  localStorage.setItem(SESSION_TOKEN_KEY, token);
+export async function saveToken(token: string): Promise<void> {
+  await setItem(SESSION_TOKEN_KEY, token);
 }
 
-export function clearToken(): void {
-  localStorage.removeItem(SESSION_TOKEN_KEY);
+export async function clearToken(): Promise<void> {
+  await removeItem(SESSION_TOKEN_KEY);
 }
 
 export async function apiFetch(
@@ -26,7 +24,7 @@ export async function apiFetch(
   if (body) headers["Content-Type"] = "application/json";
 
   if (authenticated) {
-    const token = getToken();
+    const token = await getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 

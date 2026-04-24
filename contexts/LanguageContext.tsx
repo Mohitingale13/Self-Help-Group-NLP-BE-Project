@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useMemo, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useMemo, ReactNode, useCallback, useEffect } from "react";
+import { getItem, setItem, getItemSync } from "@/lib/storage";
 
 type Language = "en" | "mr";
 
@@ -171,19 +172,24 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
-    try {
-      const saved = localStorage.getItem("shg_language");
-      return (saved === "mr" ? "mr" : "en") as Language;
-    } catch {
-      return "en";
-    }
+    const saved = getItemSync("shg_language");
+    return (saved === "mr" ? "mr" : "en") as Language;
   });
+
+  useEffect(() => {
+    let active = true;
+    getItem("shg_language").then((saved) => {
+      if (active && saved === "mr" && language !== "mr") setLanguageState("mr");
+      if (active && saved === "en" && language !== "en") setLanguageState("en");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
-    try {
-      localStorage.setItem("shg_language", lang);
-    } catch {}
+    setItem("shg_language", lang).catch(() => {});
   }, []);
 
   const t = useCallback(
